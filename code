@@ -1,0 +1,207 @@
+#include <PString.h>
+#include <Tiny4kOLED.h>
+//#include <math.h>
+#include <EEPROM.h>
+
+#include "ModernDos8.h"
+const DCfont *currentFonts = FONT8X8MDOS;
+#include "ModernDos.h"
+const DCfont *currentFontb = FONT8X16MDOS;
+const DCfont *currentFont = FONT8X16MDOS;
+
+//const DCfont *currentFont = FONT6X8;
+//const DCfont *currentFont = FONT8X16;
+//const DCfont *currentFont = FONT8X16P;
+//const DCfont *currentFont = FONT8X16DIGITS;
+//#include "font11x16.h"
+//const DCfont *currentFont = FONT11X16;
+
+#define LED1 7
+#define LED2 5
+#define But 8
+
+//const DCfont *currentFont;
+uint8_t currentCharacter;
+char settingcounter=0;
+
+void(* resetFunc) (void) = 0;  // declare reset fuction at address 0
+
+void setup(){
+  
+  pinMode(LED1, OUTPUT);
+  pinMode(LED2, OUTPUT);
+  pinMode(But, INPUT);  
+   
+  oled.begin();
+
+settingcounter = EEPROM.read(0);
+if (settingcounter == 1) {*currentFont = *currentFonts;} 
+
+  oled.setFont(currentFont);
+  if (currentFont->width == 0) {
+    oled.setSpacing(1);
+  } else {
+    oled.setSpacing(currentFont->spacing + 1);
+  }
+  currentCharacter = currentFont->first;
+  oled.on();
+  oled.clear();
+}    
+
+char bufv[20],bufi[20],bufp[20],bufr[20];
+int potVal=0, vVal=0, refVal=0, refValn=0;
+unsigned int R=0;
+double potValn=0, vValn=0;
+char v[5],iL[5],iS[5],iT[5],Vcalflag=1;
+int Vcal=0;
+float Vr,Ir,IrL,IrS;
+
+void loop(){
+
+/////////////////////////Reference////////////////////////////
+refValn=0;
+for (int i = 0; i<10; i++){
+       refVal = analogRead(3);
+       delayMicroseconds(50);
+       refValn=refValn+refVal;
+       delay(5);
+      }
+      refValn=refValn/10;
+/////////////////////Voltage //////////////////////////////
+vValn=0;
+for (int i = 0; i<10; i++){
+      vVal = analogRead(2);
+      delayMicroseconds(50);
+//      vVal = analogRead(2);
+      vValn=vValn+(vVal);
+      delay(3);
+      }
+      vValn=vValn/10;
+
+///////////////// Calibration //////////////////////
+//if (digitalRead(But) == LOW ) 
+//{Vcalflag=0; Vcal = vValn - refValn;   digitalWrite(LED1, HIGH);}  
+//else {digitalWrite(LED1, LOW);}
+///////////////
+      Vr = 3200*1.25*(vValn-Vcal-refValn)/refValn;
+      Vr=roundf(Vr);
+      Vr=Vr/100;
+////////////////////////////////////////////////////
+  // Large currents
+  potValn=0;
+ for (int i = 0; i<10; i++){
+      potVal = analogRead(0);
+      delayMicroseconds(50);
+      potValn=potValn+potVal;
+      delay(5);
+      }
+      potValn=potValn/10;
+  //    potValn = analogRead(0);
+      IrL = 1000*1.25*(potValn-refValn)/refValn;  //10 is 2000/200, 2000 is 1/0.5mohm
+      IrL=roundf(IrL);
+      IrL = IrL/100;
+/////////////////////////////////////////////////////
+  // Small currents
+  potValn=0;
+for (int i = 0; i<10; i++){
+      potVal = analogRead(1);
+      delayMicroseconds(50);
+      potValn=potValn+potVal;
+      delay(5);
+      }
+      potValn=potValn/10;
+//      potValn = analogRead(1);
+     IrS = 1.25*(potValn-refValn)/refValn;  //10 is 2000/200, 2000 is 1/0.5mohm
+     IrS=IrS/20;       //20 is x/(200*100mohm)
+//     IrS=roundf(IrS);
+//     IrS=IrS/100;
+////////////////////////////////////////////////////////////
+ ///////////////////////// Printing
+PString strv(bufv, 20);
+strv.begin();
+strv = "V: ";
+strv+=Vr;
+strv+=" V  ";
+
+PString stri(bufi, 20);
+stri.begin();
+stri = "I: ";
+PString strp(bufp, 20);
+strp.begin();
+strp = "P: ";
+PString strr(bufr, 20);
+strr.begin();
+strr = "R: ";
+if ( 0< potValn && potValn <1022 ){
+     Ir = IrS*1000;
+       stri+=Ir;
+       stri+=" mA ";
+       Ir = IrS*1000*Vr;
+       strp+=Ir;
+       strp+=" mW   ";
+       R = Vr/IrS;
+       strr+=R;
+       strr+=" Ohm  ";
+    }
+    else{
+     Ir = IrL; 
+       stri+=Ir;
+       stri+=" A   ";
+       Ir = IrL*Vr; 
+       strp+=Ir;
+       strp+=" W    ";
+       R = Vr/IrL; 
+       strr+=R;
+       strr+=" Ohm  ";
+    }
+
+switch (settingcounter){
+
+case 0:        //V and I big font
+//oled.setFont(currentFontbig);
+//oled.clear();
+oled.setCursor(10,0);
+oled.println(bufv);
+
+oled.setCursor(10,2);
+oled.println(bufi);
+break;
+
+case 1:       // V and I and P small font
+//oled.clear();
+oled.setCursor(10,0);
+oled.println(bufv);
+
+oled.setCursor(10,1);
+oled.println(bufi);
+
+oled.setCursor(10,2);
+oled.println(bufp);
+
+oled.setCursor(10,3);
+oled.println(bufr);
+break;
+
+case 2:        // V only big font
+//oled.clear();
+oled.setCursor(10,1);
+oled.println(bufv);
+break;
+
+case 3:       // I only big font
+//oled.clear();
+oled.setCursor(10,1);
+oled.println(bufi);
+break;
+
+default:
+break;
+}
+
+if (digitalRead(But) == LOW ) 
+{digitalWrite(LED1, HIGH); delay(1000); settingcounter++;  if (settingcounter>3){settingcounter=0;}  EEPROM.write(0, settingcounter); resetFunc();}  
+else {digitalWrite(LED1, LOW);}
+
+} 
+
+
